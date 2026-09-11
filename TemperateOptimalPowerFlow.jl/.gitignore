@@ -1,0 +1,8 @@
+# IDE
+.idea
+
+# Julia
+Manifest.toml
+
+# tests
+test/data
