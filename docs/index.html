@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>US Solar Repowering Map</title>
+  <meta name="description" content="Aging US utility-scale solar and battery sites that could be repowered within their existing interconnection.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='9' fill='%23c2410c'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+  <link href="style.css" rel="stylesheet">
+</head>
+<body>
+  <div id="map"></div>
+
+  <aside id="panel">
+    <header>
+      <div class="eyebrow">Repowering opportunity explorer</div>
+      <h1>US Solar Repowering Map</h1>
+      <p class="lede">Utility-scale solar and battery sites old enough to repower. Each one already has the hardest thing to get today: an interconnection.</p>
+      <button id="toggle-panel" class="ghost" aria-label="Collapse panel">–</button>
+    </header>
+
+    <div class="panel-body">
+      <section class="stats">
+        <div class="stat"><span id="s-sites">–</span><label>solar sites</label></div>
+        <div class="stat"><span id="s-gw">–</span><label>GW<sub>AC</sub> interconnected</label></div>
+        <div class="stat accent"><span id="s-twh">–</span><label>TWh/yr est. added</label></div>
+      </section>
+      <p class="stat-note"><span id="s-storage">–</span> battery sites (<span id="s-storage-gw">–</span> GW) in the same filter</p>
+
+      <section class="filters">
+        <div class="field">
+          <div class="field-head"><label>Commissioned</label><output id="o-years"></output></div>
+          <div class="dual">
+            <input type="range" id="f-ymin" min="2001" max="2025" step="1" value="2010">
+            <input type="range" id="f-ymax" min="2001" max="2025" step="1" value="2015">
+          </div>
+          <div class="presets" id="f-wave">
+            <button data-v="10-15" class="on"><strong>10–15 yrs</strong>2010–15</button>
+            <button data-v="2030"><strong>2030 wave</strong>built ≤2015</button>
+            <button data-v="2035"><strong>2035</strong>≤2018</button>
+            <button data-v="2040"><strong>2040</strong>≤2022</button>
+          </div>
+          <div class="hint">The study estimates 9.6 / 29 / 67 GW for the 2030 / 2035 / 2040 waves. EIA build years reproduce those totals if plants repower at about 15–18 years old.</div>
+        </div>
+
+        <div class="field">
+          <div class="field-head"><label>Minimum size</label><output id="o-mw"></output></div>
+          <input type="range" id="f-mw" min="0" max="100" step="1" value="5">
+        </div>
+
+        <div class="field">
+          <label>Grid region</label>
+          <div id="f-iso" class="chips"></div>
+          <label class="check iso-toggle"><input type="checkbox" id="l-iso" checked> <i class="dot iso"></i>Show ISO / RTO borders on map</label>
+        </div>
+
+        <div class="field">
+          <label>Racking</label>
+          <div class="seg" id="f-rack">
+            <button data-v="all" class="on">All</button>
+            <button data-v="fixed">Fixed tilt</button>
+            <button data-v="tracking">Tracking</button>
+          </div>
+          <div class="hint"><strong>Fixed tilt:</strong> panels are bolted at one angle, facing south, and never move. This was cheap and standard before about 2016. <strong>Tracking:</strong> rows of panels rotate east to west during the day to follow the sun, producing about 15–25% more energy from the same panels. Fixed-tilt sites have the most to gain from repowering, because new trackers can be added behind the existing interconnection.</div>
+        </div>
+
+        <div class="field row">
+          <label class="check"><input type="checkbox" id="f-storage"> Solar sites with batteries on site only</label>
+        </div>
+
+        <div class="field">
+          <label>Layers</label>
+          <label class="check"><input type="checkbox" id="l-solar" checked> <i class="dot solar"></i>Solar PV</label>
+          <label class="check"><input type="checkbox" id="l-storage" checked> <i class="dot ring"></i>Battery storage</label>
+          <label class="check"><input type="checkbox" id="l-context"> <i class="dot ctx"></i>Other solar (outside filter)</label>
+        </div>
+
+        <div class="field">
+          <label>Color solar by</label>
+          <div class="seg" id="f-color">
+            <button data-v="uplift" class="on">Est. uplift</button>
+            <button data-v="year">Year</button>
+            <button data-v="iso">Region</button>
+          </div>
+          <div id="legend"></div>
+        </div>
+      </section>
+
+      <section class="top">
+        <h2>Largest estimated gains</h2>
+        <ol id="top-list"></ol>
+      </section>
+
+      <footer>
+        <button id="open-about" class="link">Methodology &amp; sources</button>
+      </footer>
+    </div>
+  </aside>
+
+  <dialog id="about">
+    <form method="dialog"><button class="ghost close" aria-label="Close">×</button></form>
+    <h2>About this map</h2>
+    <p>This map points to existing US solar sites where swapping in modern modules, trackers and inverters could produce a lot more energy <em>without a new interconnection request</em>. The idea comes from Foundry-Logic and Crux's repowering study (<a href="https://heatmap.news/energy/solar-repowering-study" target="_blank" rel="noopener">Heatmap coverage</a>). The study estimates 9.6&nbsp;GW of repowering potential by 2030 and 67&nbsp;GW by 2040, and finds that newer panels produce up to 70% more energy than old ones.</p>
+    <h3>Data</h3>
+    <p>Every operable utility-scale (≥1&nbsp;MW) solar PV and battery generator in <a href="https://www.eia.gov/electricity/data/eia860/" target="_blank" rel="noopener">EIA Form 860</a> (<span id="data-src"></span>), rolled up to the plant. Location, balancing authority, grid voltage, racking, panel technology, DC capacity and owners all come from EIA. The plant's commissioning year is the capacity-weighted average of its generators' years.</p>
+    <h3>Grid regions</h3>
+    <p>Each plant is assigned to a market by its EIA <strong>balancing authority</strong>, not by where it sits on the map. This matters at the edges. About 2.3&nbsp;GW of 2010–16 solar in Arizona and Nevada (Agua Caliente and Silver State, among others) is dynamically scheduled into <strong>CAISO</strong>, so CAISO's interconnection rules apply even though the plants are outside California. LADWP and BANC plants are inside California but outside the CAISO market. The boundary shapes are simplified and only for display.</p>
+    <h3>Repowering waves</h3>
+    <p>Applying EIA build years to the study's totals (9.6&nbsp;GW by 2030, 29&nbsp;GW by 2035, 67&nbsp;GW by 2040) suggests plants repower at about 15–18 years old. Fleet built through 2015: 12.4&nbsp;GW. Through 2018: 30.7&nbsp;GW. Through 2022: 72.3&nbsp;GW. The 2030 wave is mostly CAISO and the non-RTO Southwest. MISO, which the study rates as having the most favorable repowering rules, has little old solar today (0.4&nbsp;GW built before 2017) but added 16&nbsp;GW in 2023–25, so its rules matter most for the 2040 wave.</p>
+    <h3>Estimated uplift</h3>
+    <p>The <strong>AC interconnection limit is held constant</strong>. The 70% figure is about energy (MWh), not capacity (MW). The uplift for each plant multiplies four effects:</p>
+    <ul>
+      <li><strong>Degradation recovered:</strong> about 0.7% of output lost per year of age, regained with new modules</li>
+      <li><strong>Tracking:</strong> +20% for capacity that is currently fixed-tilt</li>
+      <li><strong>Bifacial modules:</strong> +5%</li>
+      <li><strong>Higher DC/AC ratio:</strong> raising the plant's reported ratio to 1.35, with 60% of the added DC turning into energy after clipping</li>
+    </ul>
+    <p>The result is capped at 70%. Added TWh uses the plant's AC capacity and an assumed capacity factor (20% fixed, 24% tracking). These are screening numbers for comparing sites, not an engineering assessment. The next step would be to replace them with actual EIA-923 generation and site-specific irradiance.</p>
+    <h3>Credits</h3>
+    <p>Inspired by Robin Hawkes's <a href="https://renewables-map.robinhawkes.com/" target="_blank" rel="noopener">GB Renewables Map</a>. ISO/RTO boundaries from <a href="https://github.com/internetblake/commongrid" target="_blank" rel="noopener">CommonGrid</a> (ODbL). Basemap © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>, © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors. Built by Antonio Escallon.</p>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

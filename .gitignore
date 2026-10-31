@@ -1,17 +1,5 @@
-# macOS
 .DS_Store
-
-# Julia
-Manifest.toml
-/run/data/
-
-# Python
 __pycache__/
 *.pyc
-.ipynb_checkpoints/
-
-# env files
-.env*
-
-# editors
-.vscode/
+.venv/
+pipeline/raw/
