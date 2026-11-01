@@ -16,6 +16,9 @@ const WAVES = {
   2035: [2001, 2018],
   2040: [2001, 2022],
 };
+// The NC contract-cliff view is built but hidden for now; set to true to show it.
+const SHOW_NC = false;
+
 // NC contract cliff: estimated legacy PURPA expiries, colored soonest (red) to latest (blue).
 const EXP_FROM = 2026, EXP_TO = 2040;
 const EXP_RAMP = [2026, "#b91c1c", 2029, "#f59e0b", 2033, "#14b8a6", 2040, "#2563eb"];
@@ -232,8 +235,8 @@ function solarPopup(p) {
       ${row("Grid voltage", p.kv ? `${p.kv} kV` : null)}
       ${row("Battery on site", p.st_mw ? `${fmt(p.st_mw, 1)} MW / ${fmt(p.st_mwh, 1)} MWh` : null)}
       ${row("Operator", esc(p.operator))}
-      ${row("PURPA QF", p.exp ? `Yes · contract ${p.exp < EXP_FROM ? `ended ~${p.exp} (may have renewed)` : `ends ~${p.exp}`} (est.)` : p.qf ? "Yes" : null)}
-      ${row("Battery for 10-yr renewal", p.exp ? `${fmt(p.bat_mw, 1)} MW / ${fmt(p.bat_mwh, 1)} MWh` : null)}
+      ${!SHOW_NC ? "" : row("PURPA QF", p.exp ? `Yes · contract ${p.exp < EXP_FROM ? `ended ~${p.exp} (may have renewed)` : `ends ~${p.exp}`} (est.)` : p.qf ? "Yes" : null)}
+      ${!SHOW_NC ? "" : row("Battery for 10-yr renewal", p.exp ? `${fmt(p.bat_mw, 1)} MW / ${fmt(p.bat_mwh, 1)} MWh` : null)}
     </dl>
     <div class="hl">Est. repowering uplift <strong>+${Math.round(p.uplift * 100)}%</strong> ≈ +${fmt(p.add_mwh / 1000, 1)} GWh/yr within the same interconnection</div>
     <div class="own">Owners: ${esc(p.owners)}</div>
@@ -325,6 +328,7 @@ map.on("load", async () => {
 
 // ---------- controls ----------
 function initControls() {
+  if (!SHOW_NC) document.querySelectorAll(".nc-only").forEach((el) => el.remove());
   const ymin = $("f-ymin"), ymax = $("f-ymax"), mw = $("f-mw");
   mw.max = MW_STEPS.length - 1;
   mw.value = MW_STEPS.indexOf(state.mw);
@@ -380,7 +384,7 @@ function initControls() {
     apply();
   };
 
-  $("f-view").onclick = (e) => {
+  if (SHOW_NC) $("f-view").onclick = (e) => {
     const btn = e.target.closest("button");
     if (!btn || btn.dataset.v === state.view) return;
     state.view = btn.dataset.v;
