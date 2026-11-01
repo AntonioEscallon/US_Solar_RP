@@ -107,7 +107,9 @@ function apply() {
   if (!map.getLayer("solar")) return;
   const sf = solarFilter();
   map.setFilter("solar", sf);
-  map.setFilter("solar-context", ["!", sf]);
+  // In the NC view, context is limited to other NC plants (later expiries, non-PURPA sites).
+  const ctx = ["!", sf];
+  map.setFilter("solar-context", state.view === "nc" ? ["all", ["==", ["get", "state"], "NC"], ctx] : ctx);
   map.setFilter("storage", storageFilter());
   map.setPaintProperty("solar", "circle-color", solarColor());
   // Areas outside an ISO/RTO are left blank.
