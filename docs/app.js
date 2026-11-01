@@ -16,14 +16,21 @@ const WAVES = {
   2035: [2001, 2018],
   2040: [2001, 2022],
 };
+// NC contract cliff: estimated legacy PURPA expiries, colored soonest (red) to latest (blue).
+const EXP_FROM = 2026, EXP_TO = 2040;
+const EXP_RAMP = [2026, "#b91c1c", 2029, "#f59e0b", 2033, "#14b8a6", 2040, "#2563eb"];
+const NC_BOUNDS = [[-84.4, 33.8], [-75.4, 36.6]];
 const FONT = ["Montserrat SemiBold", "Open Sans Bold", "Noto Sans Regular", "Noto Sans CJK JP Regular"];
-const MW_STEPS = [0, 1, 5, 10, 20, 50, 100, 200];
+// EIA-860 covers plants of 1 MW or more in total; the few smaller solar arrays it lists sit at
+// larger industrial plants, so solar starts at 1 MW. Batteries of any size show at the lowest step.
+const MW_STEPS = [1, 5, 10, 20, 50, 100, 200];
 const YEAR_RAMP = [2008, "#b91c1c", 2013, "#f59e0b", 2018, "#14b8a6", 2024, "#2563eb"];
 const UPLIFT_RAMP = [0.1, "#fde68a", 0.3, "#f59e0b", 0.55, "#b91c1c"];
 
 const state = {
   ymin: 2010, ymax: 2015, mw: 5,
   isos: new Set(ISOS), rack: "all", storageOnly: false, color: "uplift",
+  view: "national", expBy: 2030, operator: null, list: "gains",
 };
 let solar = [], storage = [];
 
@@ -45,23 +52,43 @@ const map = new maplibregl.Map({
 map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
 // ---------- filters ----------
-function baseFilter() {
-  return ["all",
+// Map expressions and matches() below must stay in sync.
+const minStorageMw = () => (state.mw === MW_STEPS[0] ? 0 : state.mw);
+function commonTerms(minMw = state.mw) {
+  const f = [[">=", ["get", "mw"], minMw]];
+  if (state.operator) f.push(["==", ["get", "operator"], state.operator]);
+  return f;
+}
+function nationalTerms() {
+  return [
     [">=", ["get", "year"], state.ymin],
     ["<=", ["get", "year"], state.ymax],
-    [">=", ["get", "mw"], state.mw],
     ["in", ["get", "iso"], ["literal", [...state.isos]]],
   ];
 }
 function solarFilter() {
-  const f = baseFilter();
+  const f = ["all", ...commonTerms()];
+  if (state.view === "nc") {
+    f.push(["has", "exp"], [">=", ["get", "exp"], EXP_FROM], ["<=", ["get", "exp"], state.expBy]);
+    return f;
+  }
+  f.push(...nationalTerms());
   if (state.rack === "fixed") f.push([">=", ["get", "fixed"], 0.5]);
   if (state.rack === "tracking") f.push(["<", ["get", "fixed"], 0.5]);
   if (state.storageOnly) f.push([">", ["get", "st_mw"], 0]);
   return f;
 }
-function matches(p, solarLayer) {
-  if (p.year < state.ymin || p.year > state.ymax || p.mw < state.mw || !state.isos.has(p.iso)) return false;
+function storageFilter() {
+  const f = ["all", ...commonTerms(minStorageMw())];
+  if (state.view === "nc") f.push(["==", ["get", "state"], "NC"]);
+  else f.push(...nationalTerms());
+  return f;
+}
+function matches(p, solarLayer, ignoreOperator = false) {
+  if (p.mw < (solarLayer ? state.mw : minStorageMw())) return false;
+  if (!ignoreOperator && state.operator && p.operator !== state.operator) return false;
+  if (state.view === "nc") return solarLayer ? p.exp >= EXP_FROM && p.exp <= state.expBy : p.state === "NC";
+  if (p.year < state.ymin || p.year > state.ymax || !state.isos.has(p.iso)) return false;
   if (!solarLayer) return true;
   if (state.rack === "fixed" && p.fixed < 0.5) return false;
   if (state.rack === "tracking" && p.fixed >= 0.5) return false;
@@ -70,6 +97,7 @@ function matches(p, solarLayer) {
 }
 
 function solarColor() {
+  if (state.view === "nc") return ["interpolate", ["linear"], ["get", "exp"], ...EXP_RAMP];
   if (state.color === "year") return ["interpolate", ["linear"], ["get", "year"], ...YEAR_RAMP];
   if (state.color === "iso") return ["match", ["get", "iso"], ...ISOS.flatMap((i) => [i, ISO_COLORS[i]]), "#94a3b8"];
   return ["interpolate", ["linear"], ["get", "uplift"], ...UPLIFT_RAMP];
@@ -80,7 +108,7 @@ function apply() {
   const sf = solarFilter();
   map.setFilter("solar", sf);
   map.setFilter("solar-context", ["!", sf]);
-  map.setFilter("storage", baseFilter());
+  map.setFilter("storage", storageFilter());
   map.setPaintProperty("solar", "circle-color", solarColor());
   // Areas outside an ISO/RTO are left blank.
   const isoF = ["in", ["get", "iso"], ["literal", [...state.isos].filter((i) => i !== "Non-RTO")]];
@@ -89,29 +117,85 @@ function apply() {
     const [a, z] = WAVES[b.dataset.v];
     b.classList.toggle("on", a === state.ymin && z === state.ymax);
   });
+  document.body.classList.toggle("nc", state.view === "nc");
   updateStats();
   updateLegend();
+  if (state.view === "nc") updateChart();
 }
+
+const sum = (xs, k) => xs.reduce((a, p) => a + (p[k] || 0), 0);
 
 function updateStats() {
   const s = solar.filter((f) => matches(f.properties, true)).map((f) => f.properties);
   const b = storage.filter((f) => matches(f.properties, false)).map((f) => f.properties);
+  const nc = state.view === "nc";
   $("s-sites").textContent = fmt(s.length);
-  $("s-gw").textContent = fmt(s.reduce((a, p) => a + p.mw, 0) / 1000, 1);
-  $("s-twh").textContent = fmt(s.reduce((a, p) => a + p.add_mwh, 0) / 1e6, 1);
-  $("s-storage").textContent = fmt(b.length);
-  $("s-storage-gw").textContent = fmt(b.reduce((a, p) => a + p.mw, 0) / 1000, 2);
+  $("s-gw").textContent = fmt(sum(s, "mw") / 1000, nc ? 2 : 1);
+  $("l-gw").innerHTML = nc ? `GW<sub>AC</sub> contracts expiring` : `GW<sub>AC</sub> interconnected`;
+  if (nc) {
+    $("s-twh").textContent = fmt(sum(s, "bat_mwh") / 1000, 2);
+    $("l-twh").textContent = "GWh battery for renewal";
+    $("stat-note").innerHTML = `Under Duke's proposal these sites need <span>${fmt(sum(s, "bat_mw"))} MW / ${fmt(sum(s, "bat_mwh"))} MWh</span> of 4-hour storage to earn a 10-year renewal. <span>${fmt(b.length)}</span> NC battery sites ${state.operator ? "run by this operator" : "operate today"}.`;
+  } else {
+    $("s-twh").textContent = fmt(sum(s, "add_mwh") / 1e6, 1);
+    $("l-twh").textContent = "TWh/yr est. added";
+    $("stat-note").innerHTML = `<span>${fmt(b.length)}</span> battery sites (<span>${fmt(sum(b, "mw") / 1000, 2)}</span> GW) in the same filter`;
+  }
+  $("op-chip").hidden = !state.operator;
+  $("op-chip-name").textContent = state.operator || "";
+  if (state.list === "operators") renderOperators();
+  else renderGains(s);
+}
 
-  const top = s.sort((a, b) => b.add_mwh - a.add_mwh).slice(0, 10);
+function renderGains(s) {
+  const nc = state.view === "nc";
+  const top = s.sort(nc ? (a, b) => a.exp - b.exp || b.mw - a.mw : (a, b) => b.add_mwh - a.add_mwh).slice(0, 10);
   $("top-list").innerHTML = top.map((p) => `
     <li data-id="${p.id}">
-      <div><div class="nm">${esc(p.name)}</div><div class="sub">${p.state} · ${fmt(p.mw)} MW · ${p.years} · ${p.iso}</div></div>
-      <div class="val">+${fmt(p.add_mwh / 1000)}<div class="sub">GWh/yr</div></div>
+      <div><div class="nm">${esc(p.name)}</div><div class="sub">${p.state} · ${fmt(p.mw)} MW · ${p.years} · ${esc(p.operator)}</div></div>
+      ${nc ? `<div class="val">${p.exp}<div class="sub">expires</div></div>` : `<div class="val">+${fmt(p.add_mwh / 1000)}<div class="sub">GWh/yr</div></div>`}
     </li>`).join("") || `<li class="sub" style="cursor:default">No sites match these filters.</li>`;
+}
+
+// Portfolio roll-up by EIA operator (usually the asset manager; owners are often project LLCs).
+function renderOperators() {
+  const nc = state.view === "nc";
+  const s = solar.filter((f) => matches(f.properties, true, true)).map((f) => f.properties);
+  const by = new Map();
+  for (const p of s) {
+    const o = by.get(p.operator) || { name: p.operator, mw: 0, n: 0, add: 0, bat: 0, states: new Set() };
+    o.mw += p.mw; o.n += 1; o.add += p.add_mwh; o.bat += p.bat_mwh || 0; o.states.add(p.state);
+    by.set(p.operator, o);
+  }
+  const top = [...by.values()].sort((a, b) => b.mw - a.mw).slice(0, 15);
+  $("top-list").innerHTML = top.map((o) => `
+    <li data-op="${esc(o.name)}" class="${o.name === state.operator ? "active" : ""}">
+      <div><div class="nm">${esc(o.name)}</div><div class="sub">${o.n} sites · ${nc ? `${fmt(o.bat)} MWh battery` : `${o.states.size} state${o.states.size > 1 ? "s" : ""} · +${fmt(o.add / 1000)} GWh/yr`}</div></div>
+      <div class="val">${fmt(o.mw)}<div class="sub">MW</div></div>
+    </li>`).join("") || `<li class="sub" style="cursor:default">No sites match these filters.</li>`;
+}
+
+function updateChart() {
+  const pts = solar.map((f) => f.properties)
+    .filter((p) => p.exp >= EXP_FROM && p.exp <= EXP_TO && p.mw >= state.mw && (!state.operator || p.operator === state.operator));
+  const years = [];
+  for (let y = EXP_FROM; y <= EXP_TO; y++) years.push(y);
+  const mw = years.map((y) => sum(pts.filter((p) => p.exp === y), "mw"));
+  const max = Math.max(...mw, 1);
+  const color = (y) => {
+    for (let i = 0; i < EXP_RAMP.length - 2; i += 2) if (y < EXP_RAMP[i + 2]) return EXP_RAMP[i + 1];
+    return EXP_RAMP[EXP_RAMP.length - 1];
+  };
+  $("nc-chart").innerHTML = years.map((y, i) => `
+    <button class="bar ${y <= state.expBy ? "on" : ""}" data-y="${y}" title="${y}: ${fmt(mw[i])} MW expiring">
+      <i style="height:${Math.max((mw[i] / max) * 100, 1.5)}%;background:${color(y)}"></i>
+      <span>${y % 2 === 0 ? `'${String(y).slice(2)}` : ""}</span>
+    </button>`).join("");
 }
 
 function updateLegend() {
   const el = $("legend");
+  if (state.view === "nc") return;
   if (state.color === "iso") {
     el.innerHTML = `<div class="cats">${ISOS.map((i) => `<span><i style="background:${ISO_COLORS[i]}"></i>${i}</span>`).join("")}</div>`;
     return;
@@ -146,6 +230,8 @@ function solarPopup(p) {
       ${row("Grid voltage", p.kv ? `${p.kv} kV` : null)}
       ${row("Battery on site", p.st_mw ? `${fmt(p.st_mw, 1)} MW / ${fmt(p.st_mwh, 1)} MWh` : null)}
       ${row("Operator", esc(p.operator))}
+      ${row("PURPA QF", p.exp ? `Yes · contract ${p.exp < EXP_FROM ? `ended ~${p.exp} (may have renewed)` : `ends ~${p.exp}`} (est.)` : p.qf ? "Yes" : null)}
+      ${row("Battery for 10-yr renewal", p.exp ? `${fmt(p.bat_mw, 1)} MW / ${fmt(p.bat_mwh, 1)} MWh` : null)}
     </dl>
     <div class="hl">Est. repowering uplift <strong>+${Math.round(p.uplift * 100)}%</strong> ≈ +${fmt(p.add_mwh / 1000, 1)} GWh/yr within the same interconnection</div>
     <div class="own">Owners: ${esc(p.owners)}</div>
@@ -249,8 +335,9 @@ function initControls() {
   ymin.oninput = () => { syncYears(ymin); apply(); };
   ymax.oninput = () => { syncYears(ymax); apply(); };
   syncYears();
-  const syncMw = () => { state.mw = MW_STEPS[+mw.value]; $("o-mw").textContent = state.mw ? `≥ ${state.mw} MW` : "Any"; };
+  const syncMw = () => { state.mw = MW_STEPS[+mw.value]; $("o-mw").textContent = `≥ ${state.mw} MW`; };
   mw.oninput = () => { syncMw(); apply(); };
+  let prevMw = mw.value;
   syncMw();
 
   $("f-iso").innerHTML = ISOS.map((i) => `<button class="on" data-v="${i}" style="color:${ISO_COLORS[i]}"><i style="background:${ISO_COLORS[i]}"></i><span style="color:var(--text)">${i}</span></button>`).join("");
@@ -291,7 +378,45 @@ function initControls() {
     apply();
   };
 
+  $("f-view").onclick = (e) => {
+    const btn = e.target.closest("button");
+    if (!btn || btn.dataset.v === state.view) return;
+    state.view = btn.dataset.v;
+    state.operator = null;
+    // NC legacy QFs are mostly ≤5 MW, so the cliff view starts at the smallest size; national restores the old cutoff.
+    if (state.view === "nc") { prevMw = mw.value; mw.value = 0; } else mw.value = prevMw;
+    syncMw();
+    $("f-view").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b === btn));
+    if (state.view === "nc") map.fitBounds(NC_BOUNDS, { padding: { top: 40, bottom: 40, right: 40, left: window.innerWidth < 720 ? 20 : 400 } });
+    else map.flyTo({ center: [-97, 38.5], zoom: window.innerWidth < 720 ? 2.6 : 3.7 });
+    apply();
+  };
+  const setExpBy = (y) => {
+    state.expBy = y;
+    $("f-exp").querySelectorAll("button").forEach((b) => b.classList.toggle("on", +b.dataset.v === y));
+    $("o-exp").textContent = `${EXP_FROM} – ${y}`;
+    apply();
+  };
+  $("f-exp").onclick = (e) => { const b = e.target.closest("button"); if (b) setExpBy(+b.dataset.v); };
+  $("nc-chart").onclick = (e) => { const b = e.target.closest("button"); if (b) setExpBy(+b.dataset.y); };
+  $("o-exp").textContent = `${EXP_FROM} – ${state.expBy}`;
+
+  $("f-list").onclick = (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    state.list = btn.dataset.v;
+    $("f-list").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b === btn));
+    updateStats();
+  };
+  $("op-chip-x").onclick = () => { state.operator = null; apply(); };
+
   $("top-list").onclick = (e) => {
+    const op = e.target.closest("li[data-op]");
+    if (op) {
+      state.operator = state.operator === op.dataset.op ? null : op.dataset.op;
+      apply();
+      return;
+    }
     const li = e.target.closest("li[data-id]");
     if (!li) return;
     const f = solar.find((x) => x.properties.id === +li.dataset.id);

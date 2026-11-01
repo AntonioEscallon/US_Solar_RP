@@ -23,15 +23,34 @@
     </header>
 
     <div class="panel-body">
+      <div class="seg view-switch" id="f-view">
+        <button data-v="national" class="on">National</button>
+        <button data-v="nc">NC contract cliff</button>
+      </div>
+
       <section class="stats">
         <div class="stat"><span id="s-sites">–</span><label>solar sites</label></div>
-        <div class="stat"><span id="s-gw">–</span><label>GW<sub>AC</sub> interconnected</label></div>
-        <div class="stat accent"><span id="s-twh">–</span><label>TWh/yr est. added</label></div>
+        <div class="stat"><span id="s-gw">–</span><label id="l-gw">GW<sub>AC</sub> interconnected</label></div>
+        <div class="stat accent"><span id="s-twh">–</span><label id="l-twh">TWh/yr est. added</label></div>
       </section>
-      <p class="stat-note"><span id="s-storage">–</span> battery sites (<span id="s-storage-gw">–</span> GW) in the same filter</p>
+      <p class="stat-note" id="stat-note"></p>
+      <div class="op-chip" id="op-chip" hidden>Operator: <strong id="op-chip-name"></strong><button id="op-chip-x" aria-label="Clear operator filter">×</button></div>
+
+      <section class="field ncv nc-intro">
+        <div class="field-head"><label>Legacy PURPA contracts expiring</label><output id="o-exp"></output></div>
+        <div class="seg" id="f-exp">
+          <button data-v="2028">2028</button>
+          <button data-v="2030" class="on">2030</button>
+          <button data-v="2033">2033</button>
+          <button data-v="2035">2035</button>
+          <button data-v="2040">2040</button>
+        </div>
+        <div class="nc-chart" id="nc-chart"></div>
+        <div class="hint">MW of NC solar whose 15-year PURPA contract (estimated) ends each year. Click a bar to set the cutoff. In January 2026 Duke proposed that these sites can renew for <strong>10 years instead of 5</strong> if they add <strong>4-hour batteries sized at 20% or more of export capacity</strong>, and 1.9&nbsp;GW of these contracts expires within five years (<a href="https://www.canarymedia.com/articles/solar/north-carolina-may-use-batteries-old-solar-farms" target="_blank" rel="noopener">Canary Media</a>).</div>
+      </section>
 
       <section class="filters">
-        <div class="field">
+        <div class="field nat">
           <div class="field-head"><label>Commissioned</label><output id="o-years"></output></div>
           <div class="dual">
             <input type="range" id="f-ymin" min="2001" max="2025" step="1" value="2010">
@@ -48,16 +67,16 @@
 
         <div class="field">
           <div class="field-head"><label>Minimum size</label><output id="o-mw"></output></div>
-          <input type="range" id="f-mw" min="0" max="100" step="1" value="5">
+          <input type="range" id="f-mw" min="0" max="6" step="1" value="1">
         </div>
 
-        <div class="field">
+        <div class="field nat">
           <label>Grid region</label>
           <div id="f-iso" class="chips"></div>
           <label class="check iso-toggle"><input type="checkbox" id="l-iso" checked> <i class="dot iso"></i>Show ISO / RTO borders on map</label>
         </div>
 
-        <div class="field">
+        <div class="field nat">
           <label>Racking</label>
           <div class="seg" id="f-rack">
             <button data-v="all" class="on">All</button>
@@ -67,7 +86,7 @@
           <div class="hint"><strong>Fixed tilt:</strong> panels are bolted at one angle, facing south, and never move. This was cheap and standard before about 2016. <strong>Tracking:</strong> rows of panels rotate east to west during the day to follow the sun, producing about 15–25% more energy from the same panels. Fixed-tilt sites have the most to gain from repowering, because new trackers can be added behind the existing interconnection.</div>
         </div>
 
-        <div class="field row">
+        <div class="field row nat">
           <label class="check"><input type="checkbox" id="f-storage"> Solar sites with batteries on site only</label>
         </div>
 
@@ -78,7 +97,7 @@
           <label class="check"><input type="checkbox" id="l-context"> <i class="dot ctx"></i>Other solar (outside filter)</label>
         </div>
 
-        <div class="field">
+        <div class="field nat">
           <label>Color solar by</label>
           <div class="seg" id="f-color">
             <button data-v="uplift" class="on">Est. uplift</button>
@@ -90,7 +109,10 @@
       </section>
 
       <section class="top">
-        <h2>Largest estimated gains</h2>
+        <div class="seg" id="f-list">
+          <button data-v="gains" class="on"><span class="nat-inline">Largest gains</span><span class="ncv-inline">Soonest expiring</span></button>
+          <button data-v="operators">Top operators</button>
+        </div>
         <ol id="top-list"></ol>
       </section>
 
@@ -110,6 +132,8 @@
     <p>Each plant is assigned to a market by its EIA <strong>balancing authority</strong>, not by where it sits on the map. This matters at the edges. About 2.3&nbsp;GW of 2010–16 solar in Arizona and Nevada (Agua Caliente and Silver State, among others) is dynamically scheduled into <strong>CAISO</strong>, so CAISO's interconnection rules apply even though the plants are outside California. LADWP and BANC plants are inside California but outside the CAISO market. The boundary shapes are simplified and only for display.</p>
     <h3>Repowering waves</h3>
     <p>Applying EIA build years to the study's totals (9.6&nbsp;GW by 2030, 29&nbsp;GW by 2035, 67&nbsp;GW by 2040) suggests plants repower at about 15–18 years old. Fleet built through 2015: 12.4&nbsp;GW. Through 2018: 30.7&nbsp;GW. Through 2022: 72.3&nbsp;GW. The 2030 wave is mostly CAISO and the non-RTO Southwest. MISO, which the study rates as having the most favorable repowering rules, has little old solar today (0.4&nbsp;GW built before 2017) but added 16&nbsp;GW in 2023–25, so its rules matter most for the 2040 wave.</p>
+    <h3>North Carolina contract cliff</h3>
+    <p>Before HB 589 (2017), NC let qualifying facilities (QFs) of up to 5&nbsp;MW sign 15-year standard-offer contracts under PURPA, the federal law requiring utilities to buy power from small independent generators. Together with the state's 35% renewable tax credit, which expired at the end of 2015, this produced hundreds of fixed-tilt 5&nbsp;MW farms. The NC view shows every NC solar plant that EIA flags as a QF, with its contract assumed to end 15 years after it entered service. On that basis, 1.45&nbsp;GW expires in 2026–30 and 2.15&nbsp;GW in 2026–31, which brackets Duke's 1.9&nbsp;GW five-year figure. Actual contract dates vary: some sites signed before going into service, and some renewed once under HB 951 (2021). The battery requirement is 20% of AC nameplate for 4 hours, following Duke's 2026 proposal. <strong>Operators</strong> are as reported to EIA and are usually the asset manager; legal owners are often project-level LLCs.</p>
     <h3>Estimated uplift</h3>
     <p>The <strong>AC interconnection limit is held constant</strong>. The 70% figure is about energy (MWh), not capacity (MW). The uplift for each plant multiplies four effects:</p>
     <ul>

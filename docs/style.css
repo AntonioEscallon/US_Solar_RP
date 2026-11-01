@@ -127,3 +127,21 @@ dialog#about .close { position: absolute; top: 12px; right: 14px; }
 .hint { color: var(--muted); font-size: 11px; margin-top: 6px; }
 .iso-label { font: 600 11px Inter, system-ui, sans-serif; letter-spacing: .08em; }
 .iso-toggle { margin-top: 8px; }
+
+.view-switch { margin-bottom: 12px; }
+.view-switch button { padding: 7px 10px; font-size: 13px; }
+body.nc .nat, body:not(.nc) .ncv { display: none !important; }
+body.nc .nat-inline, body:not(.nc) .ncv-inline { display: none; }
+.nc-intro { margin-top: 14px; }
+.nc-chart { display: flex; align-items: flex-end; gap: 3px; height: 96px; margin-top: 12px; }
+.nc-chart .bar { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; background: none; border: 0; padding: 0; cursor: pointer; }
+.nc-chart .bar i { display: block; width: 100%; border-radius: 3px 3px 0 0; opacity: .25; }
+.nc-chart .bar.on i { opacity: 1; }
+.nc-chart .bar span { font-size: 10px; color: var(--muted); height: 14px; line-height: 14px; margin-top: 3px; }
+.op-chip { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding: 6px 8px 6px 10px; background: rgba(194,65,12,.08); border-radius: 6px; font-size: 12px; color: var(--muted); }
+.op-chip strong { color: var(--text); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.op-chip button { background: none; border: 0; font-size: 16px; color: var(--muted); cursor: pointer; padding: 0 2px; }
+.op-chip[hidden] { display: none; }
+#f-list { margin-bottom: 8px; }
+#top-list li.active { background: rgba(194,65,12,.08); }
+.hint a { color: var(--accent); }

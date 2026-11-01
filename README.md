@@ -10,6 +10,8 @@ It builds on Foundry-Logic and Crux's repowering study ([Heatmap coverage](https
 - Filters for commissioning year (defaults to 2010–2015, i.e. 10–15 years old), size, grid region (ISO/RTO), fixed vs. tracking racking, and battery on site
 - One-click presets for the study's 2030 / 2035 / 2040 repowering waves
 - ISO/RTO boundaries (from CommonGrid) drawn on a light basemap
+- **NC contract cliff view.** Every NC solar plant EIA flags as a PURPA qualifying facility, with an estimated contract expiry (15 years after entering service), a chart of MW expiring each year, and the battery each site would need under Duke's January 2026 proposal (10-year renewal for 4-hour storage sized at 20% or more of export). This gives 1.45 GW expiring in 2026–30 and 2.15 GW in 2026–31, which brackets Duke's 1.9 GW five-year figure.
+- **Operator roll-up.** Portfolios ranked by MW for the current filter (EIA operator, usually the asset manager). Clicking an operator filters the map to their sites.
 - Live totals for the current filter: site count, interconnected GW, and estimated added TWh/yr
 - A ranked list of the sites with the largest estimated energy gain
 - A detail card for each plant: capacity (AC/DC), age, racking, module technology, grid voltage, battery on site, operator and owners

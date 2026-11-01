@@ -48,6 +48,14 @@ DC_AC_ENERGY_ELASTICITY = 0.6  # share of added DC that becomes energy after cli
 UPLIFT_CAP = 0.70              # study's "up to 70% more energy"
 BASE_CF = {"fixed": 0.20, "tracking": 0.24}
 
+# --- North Carolina legacy PURPA contracts ----------------------------------
+# Pre-HB 589 standard-offer contracts ran 15 years; we assume the term starts at
+# the in-service year. Duke's 2026 proposal offers a 10-year renewal to sites
+# that add 4-hour storage sized at >=20% of export capacity.
+NC_QF_TERM_YEARS = 15
+NC_BATTERY_SHARE = 0.20
+NC_BATTERY_HOURS = 4
+
 
 def download(year: int) -> Path:
     dest = RAW / f"eia860{year}"
@@ -130,6 +138,7 @@ def build_solar(src: Path, year: int, plants: pd.DataFrame, owners: pd.Series, s
         uplift = estimate_uplift(age, fixed_share, dc_ac)
         cf = BASE_CF["fixed"] * fixed_share + BASE_CF["tracking"] * (1 - fixed_share)
         base_mwh = r.mw * 8760 * cf * (1 - DEGRADATION_PER_YEAR * age)
+        nc_qf = r.state == "NC" and r.qf
         features.append({
             "type": "Feature",
             "geometry": {"type": "Point", "coordinates": [round(r.lon, 5), round(r.lat, 5)]},
@@ -154,6 +163,12 @@ def build_solar(src: Path, year: int, plants: pd.DataFrame, owners: pd.Series, s
                 "st_mwh": round(r.st_mwh, 1) if pd.notna(r.st_mwh) else 0,
                 "uplift": round(uplift, 3),
                 "add_mwh": round(base_mwh * uplift),
+                "qf": bool(r.qf),
+                **({
+                    "exp": int(r.year) + NC_QF_TERM_YEARS,
+                    "bat_mw": round(r.mw * NC_BATTERY_SHARE, 2),
+                    "bat_mwh": round(r.mw * NC_BATTERY_SHARE * NC_BATTERY_HOURS, 1),
+                } if nc_qf else {}),
             },
         })
     return features
@@ -240,6 +255,7 @@ def main():
         "lon": pd.to_numeric(p["Longitude"], errors="coerce").values,
         "ba": p["Balancing Authority Code"].astype(str).replace("nan", "").values,
         "kv": pd.to_numeric(p["Grid Voltage (kV)"], errors="coerce").values,
+        "qf": p["FERC Small Power Producer Status"].astype(str).str.upper().eq("Y").values,
     }, index=p["Plant Code"])
     plants["iso"] = plants["ba"].map(ISO_BY_BA).fillna("Non-RTO")
     plants["kv"] = plants["kv"].where(plants["kv"] > 0).round(1)
